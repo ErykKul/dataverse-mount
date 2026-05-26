@@ -1,0 +1,18 @@
+# Local secrets
+.env
+*.env
+!sample.env
+
+# Build artefacts
+/dist/
+/build/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Test fixtures
+/tmp/
