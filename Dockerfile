@@ -7,7 +7,7 @@
 # We clone the rclone fork at a pinned ref so reproducible builds don't
 # depend on the build host. Override RCLONE_REPO/RCLONE_REF to point at
 # a different fork or branch.
-FROM golang:1.24-bookworm AS rclone-build
+FROM golang:1.25-bookworm AS rclone-build
 
 ARG RCLONE_REPO=https://github.com/ErykKul/rclone.git
 ARG RCLONE_REF=dataverse-backend

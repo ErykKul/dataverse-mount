@@ -69,6 +69,7 @@ start_mount_background() {
   log "starting rclone mount on $MOUNTPOINT (background)"
   rclone mount dataverse: "$MOUNTPOINT" \
     --allow-other \
+    --allow-non-empty \
     --read-only \
     --vfs-cache-mode "${VFS_CACHE_MODE:-minimal}" \
     --vfs-cache-max-age "${VFS_CACHE_MAX_AGE:-1h}" \
@@ -112,9 +113,18 @@ case "$mode" in
     # Run rclone in the foreground — this is the simplest contract:
     # the container's lifetime IS the mount's lifetime. tini forwards
     # signals so docker stop unmounts cleanly.
+    #
+    # --allow-non-empty: when the user bind-mounts `/mnt/dataset` to a
+    # host directory with `bind-propagation=rshared` (the recommended
+    # rclone-in-docker pattern), the bind mount makes `/mnt/dataset`
+    # look like an existing mountpoint and rclone's safety check
+    # would refuse. The check is for "user pointed at a non-empty
+    # local dir by accident"; in our case the dir IS empty, it's just
+    # a propagation-mode bind, so it's safe to skip.
     log "mounting Dataverse dataset on $MOUNTPOINT (foreground)"
     exec rclone mount dataverse: "$MOUNTPOINT" \
       --allow-other \
+      --allow-non-empty \
       --read-only \
       --vfs-cache-mode "${VFS_CACHE_MODE:-minimal}" \
       --vfs-cache-max-age "${VFS_CACHE_MAX_AGE:-1h}" \

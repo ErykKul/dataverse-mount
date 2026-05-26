@@ -83,6 +83,24 @@ https://rclone.org/install/#docker-image)
 If you don't want a host bind mount and just want to `docker exec` into
 the container to inspect files, drop the `--mount` flag.
 
+### DNS for presigned-URL hosts
+
+When Dataverse is configured for direct S3 download, `/api/access/datafile/{id}`
+returns a 302 to whatever hostname the storage driver was registered with
+(e.g. `s3.us-east-1.amazonaws.com`, `minio.example.com`). The container
+needs to resolve that hostname. For public hosts this just works. For
+private hosts or local dev setups where the S3 endpoint lives under a
+`.localhost` subdomain (e.g. `minio.localhost:9000`), add a static
+mapping:
+
+```bash
+docker run --add-host minio.example.com:10.0.0.42 ... 
+```
+
+Symptom of a missing mapping: listings work but reads fail with `cat:
+…: Input/output error`. Container logs show the rclone backend got a
+redirect target it couldn't resolve.
+
 ## Globus mode
 
 For when you want the dataset reachable as a Globus endpoint — useful
