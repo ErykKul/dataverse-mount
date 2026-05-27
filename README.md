@@ -39,6 +39,14 @@ changes — works against any standard Dataverse. Everything runs
 inside one Docker container on your own machine: download the repo,
 run the script, you're done.
 
+**Free Globus account is enough.** Globus Connect Personal — the
+component this tool installs — runs under Globus's free personal-use
+tier. The Dataverse institution doesn't need a paid Globus
+subscription, doesn't need to run a Globus Connect Server, doesn't
+need to manage endpoints. They publish a dataset; you mount it. Zero
+ongoing cost for the institution, no signup beyond your own free
+Globus account.
+
 See the [Quickstart](#quickstart) below for the three-line setup.
 
 ```text
