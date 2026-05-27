@@ -225,6 +225,7 @@ All passed via environment variables. See `sample.env` for defaults.
 | `DV_TOKEN`         | `mount`/`mount-globus` | Dataverse API token. Sent as `X-Dataverse-Key` on every request. |
 | `DATASET_PID`      | `mount`/`mount-globus` | Persistent ID, e.g. `doi:10.5072/FK2/ABCD`. |
 | `DATASET_VERSION`  | optional             | `:latest`, `:draft`, `:latest-published`, or `1.0`/`2.0`/…. Default `:latest`. |
+| `INGEST_FORMAT`    | optional             | `original` (default) or `archival`. Which form of a tabular-ingest file (CSV/Stata/SPSS) the mount surfaces. See the backend README for the trade-off. |
 | `VFS_CACHE_MODE`   | optional             | rclone VFS cache mode. Default `minimal`. |
 | `VFS_CACHE_MAX_AGE`| optional             | How long cached bytes stay valid. Default `1h`. |
 | `RCLONE_LOG_LEVEL` | optional             | `DEBUG`/`INFO`/`NOTICE`/`ERROR`. Default `INFO`. |

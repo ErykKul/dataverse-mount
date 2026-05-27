@@ -61,6 +61,7 @@ host = $DV_HOST
 token = $DV_TOKEN
 dataset_pid = $DATASET_PID
 version = ${DATASET_VERSION:-:latest}
+ingest_format = ${INGEST_FORMAT:-original}
 EOF
 }
 
