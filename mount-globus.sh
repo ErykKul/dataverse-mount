@@ -9,6 +9,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Early failure with a clear message if Docker is missing or not running.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: docker not installed — see https://docs.docker.com/engine/install/" >&2
+  exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: docker daemon not reachable (is dockerd running? are you in the 'docker' group?)" >&2
+  exit 1
+fi
+
 IMAGE_TAG="${IMAGE_TAG:-dataverse-mount:local-globus}"
 CONTAINER_NAME="${CONTAINER_NAME:-dv-mount-globus}"
 DATA_DIR="${DATA_DIR:-./data}"
@@ -124,7 +134,8 @@ source "$ENV_FILE"
 set +a
 
 ADD_HOST_FLAGS=()
-if [[ "$DV_HOST" == http://localhost:* ]]; then
+# See mount.sh for why this regex matches any loopback form.
+if [[ "$DV_HOST" =~ ^https?://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+)(:[0-9]+)?(/|$) ]]; then
   ADD_HOST_FLAGS+=(--add-host minio.localhost:127.0.0.1 --network host)
 fi
 

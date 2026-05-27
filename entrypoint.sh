@@ -105,8 +105,10 @@ unmount_quiet() {
 case "$mode" in
   mount)
     require_env DV_HOST
-    require_env DV_TOKEN
     require_env DATASET_PID
+    # DV_TOKEN is OPTIONAL — empty means guest access for public
+    # datasets and public files. The rclone backend skips the
+    # X-Dataverse-Key header when the token is empty.
 
     write_rclone_conf
     mkdir -p "$MOUNTPOINT"
@@ -136,8 +138,8 @@ case "$mode" in
 
   mount-globus)
     require_env DV_HOST
-    require_env DV_TOKEN
     require_env DATASET_PID
+    # DV_TOKEN is OPTIONAL (see mount mode above).
     require_globus_installed
     [[ -d "$GCP_STATE" ]] || fail "GCP state not found at $GCP_STATE. Run 'globus-setup' first."
     # GCP v3.x stores credentials under $GCP_STATE/lta/. Older versions
@@ -152,6 +154,19 @@ case "$mode" in
     log "$MOUNTPOINT top-level:"
     ls -la "$MOUNTPOINT" | head -10 || true
 
+    # Tell GCP exactly which paths to expose. By default it would
+    # share the user's $HOME (only rclone.log lives there). We want
+    # the dataset, read-only.
+    GCP_PATHS="${GCP_RESTRICT_PATHS:-R$MOUNTPOINT}"
+    log "starting Globus Connect Personal in the foreground (restrict-paths=$GCP_PATHS)"
+    cd "$GCP_DIR"
+    ./globusconnectpersonal -start -restrict-paths "$GCP_PATHS" &
+    GCP_PID=$!
+
+    # Install the trap AFTER GCP_PID is captured so cleanup never
+    # races against the kick-off and finds GCP_PID empty. If a signal
+    # arrives in the tiny window before this, tini (PID 1) handles
+    # container shutdown.
     cleanup() {
       log "shutdown requested; unmounting $MOUNTPOINT"
       unmount_quiet
@@ -162,15 +177,6 @@ case "$mode" in
       fi
     }
     trap cleanup TERM INT
-
-    # Tell GCP exactly which paths to expose. By default it would
-    # share the user's $HOME (only rclone.log lives there). We want
-    # the dataset, read-only.
-    GCP_PATHS="${GCP_RESTRICT_PATHS:-R$MOUNTPOINT}"
-    log "starting Globus Connect Personal in the foreground (restrict-paths=$GCP_PATHS)"
-    cd "$GCP_DIR"
-    ./globusconnectpersonal -start -restrict-paths "$GCP_PATHS" &
-    GCP_PID=$!
     wait "$GCP_PID"
     ;;
 

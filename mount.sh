@@ -11,6 +11,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Early failure with a clear message if Docker is missing or not running.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: docker not installed — see https://docs.docker.com/engine/install/" >&2
+  exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: docker daemon not reachable (is dockerd running? are you in the 'docker' group?)" >&2
+  exit 1
+fi
+
 IMAGE_TAG="${IMAGE_TAG:-dataverse-mount:local}"
 CONTAINER_NAME="${CONTAINER_NAME:-dv-mount}"
 DATA_DIR="${DATA_DIR:-./data}"
@@ -94,10 +104,13 @@ source "$ENV_FILE"
 set +a
 
 ADD_HOST_FLAGS=()
-# Convenience for local dev: when the host is rdm-integration's
-# localhost Dataverse, the presigned URLs point at minio.localhost
-# which the container can't resolve. Add a host entry transparently.
-if [[ "$DV_HOST" == http://localhost:* ]]; then
+# Convenience for local dev: when the host points at a loopback
+# address (localhost / 127.x in any form), the rdm-integration
+# Dataverse hands back presigned URLs for `minio.localhost:9000`
+# that the container can't resolve. Add a host entry transparently
+# and switch to `--network host` so the container reaches the host's
+# Dataverse port.
+if [[ "$DV_HOST" =~ ^https?://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+)(:[0-9]+)?(/|$) ]]; then
   ADD_HOST_FLAGS+=(--add-host minio.localhost:127.0.0.1 --network host)
 fi
 
