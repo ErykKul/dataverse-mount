@@ -47,6 +47,17 @@ need to manage endpoints. They publish a dataset; you mount it. Zero
 ongoing cost for the institution, no signup beyond your own free
 Globus account.
 
+**Almost no configuration.** The traditional "Dataverse + managed
+Globus" path requires the institution to stand up a Globus Connect
+Server, register endpoints, set up identity mapping between Dataverse
+and Globus accounts, and usually a paid Globus subscription —
+realistic only for institutions with dedicated data-engineering
+staff. This tool needs just three pieces of information from you:
+the Dataverse URL, the dataset DOI, and (optionally) an API token if
+the files aren't public. The Globus-mode setup is one extra
+guided browser login. No service registration, no admin involvement,
+no Dataverse-side Globus configuration.
+
 See the [Quickstart](#quickstart) below for the three-line setup.
 
 ```text
