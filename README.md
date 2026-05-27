@@ -123,6 +123,61 @@ Stops whichever container is running (`dv-mount` or `dv-mount-globus`)
 and clears any stale FUSE mount on `./data`. Idempotent — safe to run
 any time.
 
+### `./reset-globus.sh` — wipe the Globus endpoint state
+
+Removes `./globus-state/` so the next `./mount-globus.sh` registers a
+new endpoint (with a fresh device-code login). Prints the URL to
+delete the endpoint on Globus's side too — both halves need to go for
+a real reset. Use `-y` to skip the confirmation prompt.
+
+## What happens during restarts and interruptions
+
+- **Container restart** (e.g. `docker stop` / re-run, host reboot,
+  laptop sleep). Globus Transfer tracks each task server-side. When
+  the endpoint disconnects mid-transfer, the task pauses and Globus
+  resumes it once the endpoint comes back. On our side, restarting
+  the script re-fetches the file list, re-uses the Globus credentials
+  in `./globus-state/`, and the endpoint reconnects automatically.
+  Resume granularity is per-file (Globus's standard).
+
+- **Presigned-URL expiry mid-stream** (long single-file transfer
+  through a 1-hour AWS URL TTL). The rclone backend detects this,
+  fetches a fresh URL, and re-issues the GET with `Range:
+  bytes=<bytes-already-read>-…` transparently. The caller never sees
+  the failure.
+
+- **Dataset gets a new version while we're running.** The file list
+  is frozen at mount time on purpose (so it can't shift under an
+  in-progress transfer). New / removed files only show up after a
+  restart. This is the one interruption case that needs human
+  attention.
+
+- **Network blips, Dataverse 5xx errors.** rclone retries by default.
+  If retries exhaust, Globus retries the task.
+
+## Resetting for a demo or fresh start
+
+The Globus endpoint has two halves: local credentials in
+`./globus-state/` and a registered endpoint on Globus's side.
+
+To reset both:
+
+```bash
+./unmount.sh        # stop the container if it's running
+./reset-globus.sh   # wipe ./globus-state/ (and any legacy Docker volume)
+```
+
+Then open https://app.globus.org/file-manager/collections, find the
+endpoint (named whatever you typed during setup, default
+`dataverse-mount-<hostname>`), menu → **Delete**.
+
+Next `./mount-globus.sh` walks you through registering a fresh
+endpoint from scratch.
+
+(If you only delete the local state without removing the endpoint on
+Globus, the orphaned endpoint stays listed in your account forever
+but doesn't do anything — harmless, just untidy.)
+
 ## Tabular files (CSV, Stata, SPSS, …)
 
 Dataverse "ingests" tabular uploads: it parses the file and stores

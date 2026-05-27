@@ -3,6 +3,10 @@
 *.env
 !sample.env
 
+# Mount target and Globus endpoint state (per-user)
+/data/
+/globus-state/
+
 # Build artefacts
 /dist/
 /build/

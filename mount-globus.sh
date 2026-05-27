@@ -3,8 +3,8 @@
 # Globus endpoint on top of the FUSE mount.
 #
 # First run does a one-time Globus device-code login. Endpoint
-# credentials persist in the `dataverse-globus-state` Docker volume,
-# so subsequent runs reconnect without prompting.
+# credentials live in ./globus-state/ on the host (gitignored). To
+# fully wipe and re-register, use ./reset-globus.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -13,7 +13,7 @@ IMAGE_TAG="${IMAGE_TAG:-dataverse-mount:local-globus}"
 CONTAINER_NAME="${CONTAINER_NAME:-dv-mount-globus}"
 DATA_DIR="${DATA_DIR:-./data}"
 ENV_FILE="${ENV_FILE:-.env}"
-GCP_VOLUME="${GCP_VOLUME:-dataverse-globus-state}"
+GCP_STATE_DIR="${GCP_STATE_DIR:-./globus-state}"
 
 prompt() {
   local var="$1" label="$2" default="${3-}"
@@ -74,15 +74,13 @@ ensure_data_dir() {
 }
 
 ensure_globus_state() {
-  docker volume inspect "$GCP_VOLUME" >/dev/null 2>&1 || \
-    docker volume create "$GCP_VOLUME" >/dev/null
+  mkdir -p "$GCP_STATE_DIR"
+  local abs_state
+  abs_state="$(readlink -f "$GCP_STATE_DIR")"
 
-  # Has a working endpoint been registered? Look for `lta/gridmap` in
-  # the GCP state directory.
-  local has_state
-  has_state="$(docker run --rm -v "$GCP_VOLUME":/state alpine \
-    sh -c 'test -f /state/lta/gridmap && echo yes || echo no')"
-  if [[ "$has_state" == "yes" ]]; then
+  # `lta/gridmap` is the marker that GCP -setup has been completed
+  # successfully against this state directory.
+  if [[ -f "$abs_state/lta/gridmap" ]]; then
     return
   fi
 
@@ -97,13 +95,15 @@ ensure_globus_state() {
   echo "  - Open the URL in your browser, log into Globus, paste the code"
   echo
 
-  docker run --rm -it \
-    -v "$GCP_VOLUME":/home/dvgr/.globusonline \
+  local setup_tty=(-i)
+  if [[ -t 0 && -t 1 ]]; then setup_tty+=(-t); fi
+  docker run --rm "${setup_tty[@]}" \
+    --mount type=bind,source="$abs_state",target=/home/dvgr/.globusonline \
     -e "GLOBUS_ENDPOINT_NAME=$GLOBUS_ENDPOINT_NAME" \
     "$IMAGE_TAG" globus-setup
 
   echo
-  echo "Endpoint registered. Continuing with mount…"
+  echo "Endpoint registered. State saved at $abs_state."
 }
 
 stop_stale() {
@@ -129,10 +129,13 @@ if [[ "$DV_HOST" == http://localhost:* ]]; then
 fi
 
 ABS_DATA="$(readlink -f "$DATA_DIR")"
+ABS_STATE="$(readlink -f "$GCP_STATE_DIR")"
 
 echo
 echo "Mounting $DATASET_PID from $DV_HOST"
 echo "  → $ABS_DATA (also exposed via Globus endpoint at /mnt/dataset)"
+echo "  Globus state: $ABS_STATE  (rm -rf to reset; also delete the endpoint"
+echo "                              at https://app.globus.org/file-manager/collections)"
 echo "  Ctrl-C to stop the endpoint and unmount."
 echo
 
@@ -143,6 +146,6 @@ exec docker run --rm "${TTY_FLAGS[@]}" --name "$CONTAINER_NAME" \
   "${ADD_HOST_FLAGS[@]}" \
   --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
   --mount type=bind,source="$ABS_DATA",target=/mnt/dataset,bind-propagation=rshared \
-  -v "$GCP_VOLUME":/home/dvgr/.globusonline \
+  --mount type=bind,source="$ABS_STATE",target=/home/dvgr/.globusonline \
   --env-file "$ENV_FILE" \
   "$IMAGE_TAG" mount-globus
