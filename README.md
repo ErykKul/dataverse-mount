@@ -120,28 +120,33 @@ publishes it:
 docker pull ghcr.io/erykkul/dataverse-mount:latest-globus
 ```
 
-### 2. Log into Globus and grab a setup key
+### 2. Register the endpoint (one-time, interactive)
 
-Visit https://app.globus.org/collections/gcp. Log in with your
-institutional ID / Google / ORCID. Click **Create new endpoint**,
-copy the setup key. The key is single-use.
-
-### 3. Register the endpoint (one-time)
+GCP no longer hands out setup keys from a web button. Run the setup
+mode interactively — it'll print a URL and a one-time code, you visit
+the URL in any browser, log into Globus, paste the code, and the
+endpoint registers itself.
 
 ```bash
 docker volume create dataverse-globus-state
 
 docker run --rm -it \
   -v dataverse-globus-state:/home/dvgr/.globusonline \
-  -e GLOBUS_SETUP_KEY="<paste-the-key>" \
+  -e GLOBUS_ENDPOINT_NAME="my-dataverse-mount" \
   dataverse-mount:globus globus-setup
 ```
 
-You should see `Configuration directory: …` followed by
-`Endpoint registered`. The volume now holds your endpoint's
-credentials and survives container restarts.
+Watch the terminal for a `https://auth.globus.org/v2/oauth2/device`
+URL and a short user code. Once you complete the device-code flow in
+your browser, GCP writes credentials into the volume and exits. The
+endpoint now shows up in the Globus web app under your account, and
+the volume survives container restarts.
 
-### 4. Run the mount + Globus together
+(If you have a legacy setup key from somewhere, pass it via
+`GLOBUS_SETUP_KEY=…` instead. The web UI doesn't generate these
+anymore but old keys still work via the same code path.)
+
+### 3. Run the mount + Globus together
 
 ```bash
 docker run -d --name dv-globus \
@@ -186,7 +191,8 @@ All passed via environment variables. See `sample.env` for defaults.
 | `VFS_CACHE_MODE`   | optional             | rclone VFS cache mode. Default `minimal`. |
 | `VFS_CACHE_MAX_AGE`| optional             | How long cached bytes stay valid. Default `1h`. |
 | `RCLONE_LOG_LEVEL` | optional             | `DEBUG`/`INFO`/`NOTICE`/`ERROR`. Default `INFO`. |
-| `GLOBUS_SETUP_KEY` | `globus-setup` only  | One-time key from the Globus web UI. |
+| `GLOBUS_ENDPOINT_NAME` | `globus-setup` (optional) | Name to give the new endpoint in Globus. Defaults to `dataverse-mount-<hostname>`. |
+| `GLOBUS_SETUP_KEY` | `globus-setup` (legacy) | Old-style setup key. Web UI no longer issues these; provided for backwards compatibility only. |
 
 ## Read-only by design
 

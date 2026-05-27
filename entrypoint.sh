@@ -166,12 +166,26 @@ case "$mode" in
     ;;
 
   globus-setup)
-    require_env GLOBUS_SETUP_KEY
     require_globus_installed
     mkdir -p "$GCP_STATE"
-    log "registering GCP endpoint via globusconnectpersonal -setup"
     cd "$GCP_DIR"
-    ./globusconnectpersonal -setup "$GLOBUS_SETUP_KEY"
+    # Two ways to register, both still supported by GCP's `-setup`:
+    #   1. Pass `GLOBUS_SETUP_KEY`. Legacy path — Globus's web UI no
+    #      longer hands these out, but if you have one from elsewhere
+    #      it still works.
+    #   2. Pass `GLOBUS_ENDPOINT_NAME` (or accept the default). Modern
+    #      path — GCP's device-code OAuth flow prompts you to open a
+    #      URL, log into Globus in your browser, paste a verification
+    #      code back. Requires `docker run -it` so the prompts reach
+    #      your terminal.
+    if [[ -n "${GLOBUS_SETUP_KEY:-}" ]]; then
+      log "registering with provided GLOBUS_SETUP_KEY"
+      ./globusconnectpersonal -setup --setup-key "$GLOBUS_SETUP_KEY"
+    else
+      name="${GLOBUS_ENDPOINT_NAME:-dataverse-mount-$(hostname)}"
+      log "registering new endpoint '$name' (device-code flow — follow the prompts)"
+      ./globusconnectpersonal -setup --name "$name"
+    fi
     log "GCP setup complete. State persisted at $GCP_STATE."
     ;;
 
