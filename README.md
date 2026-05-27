@@ -78,10 +78,27 @@ files, draft versions, or owner-only access.
 
 ## Prerequisites
 
-- Linux host with Docker, `/dev/fuse`, and the `SYS_ADMIN` capability
-  (FUSE requires it). Tested on `linux/amd64` and `linux/arm64`.
-- That's it for the mount-only path. For the Globus path you'll also
-  need a free Globus account at https://app.globus.org.
+- Docker (Engine on Linux; Docker Desktop on macOS or WSL2 on
+  Windows).
+- For the Globus path: a free Globus account at
+  https://app.globus.org.
+
+### Platform notes
+
+| Platform        | Mount mode                                     | Globus mode  |
+| ---             | ---                                            | ---          |
+| Linux           | ✅ full host visibility via bind-mount         | ✅ full       |
+| WSL2 (Windows)  | ✅ same as Linux (clone *inside* WSL for speed) | ✅ full       |
+| macOS           | ⚠️ visible inside container only (see below)    | ✅ full       |
+
+On macOS, Docker Desktop runs containers inside a hidden Linux VM.
+FUSE works fine *inside* that VM, but the mount events don't
+propagate back to the macOS filesystem — so `./data` on the host
+won't show files even while the container is happily serving them.
+Two workarounds: (a) browse via `docker exec -it dv-mount ls /mnt/dataset`,
+or (b) use the Globus mode and pull the dataset to a Globus endpoint
+on your Mac (e.g. a Globus Connect Personal you've installed
+natively), which writes straight to your real filesystem.
 
 ## Three scripts
 

@@ -7,19 +7,18 @@
 #
 # Public datasets work without a token. A token is only needed for
 # restricted files, draft versions, or owner-only datasets.
+#
+# Platforms: Linux + WSL2 (full host visibility via bind-mount);
+# macOS (mount visible inside the container only — see the
+# warn_mount_visibility output below).
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Early failure with a clear message if Docker is missing or not running.
-if ! command -v docker >/dev/null 2>&1; then
-  echo "ERROR: docker not installed — see https://docs.docker.com/engine/install/" >&2
-  exit 1
-fi
-if ! docker info >/dev/null 2>&1; then
-  echo "ERROR: docker daemon not reachable (is dockerd running? are you in the 'docker' group?)" >&2
-  exit 1
-fi
+# shellcheck disable=SC1091
+source "./lib.sh"
+
+require_docker
 
 IMAGE_TAG="${IMAGE_TAG:-dataverse-mount:local}"
 CONTAINER_NAME="${CONTAINER_NAME:-dv-mount}"
@@ -109,23 +108,28 @@ ADD_HOST_FLAGS=()
 # Dataverse hands back presigned URLs for `minio.localhost:9000`
 # that the container can't resolve. Add a host entry transparently
 # and switch to `--network host` so the container reaches the host's
-# Dataverse port.
+# Dataverse port. (`--network host` is a Linux-only behaviour; on
+# macOS Docker Desktop it's silently equivalent to bridge mode.)
 if [[ "$DV_HOST" =~ ^https?://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+)(:[0-9]+)?(/|$) ]]; then
   ADD_HOST_FLAGS+=(--add-host minio.localhost:127.0.0.1 --network host)
 fi
 
-ABS_DATA="$(readlink -f "$DATA_DIR")"
+ABS_DATA="$(abspath "$DATA_DIR")"
 
 echo
 echo "Mounting $DATASET_PID from $DV_HOST"
 echo "  → $ABS_DATA (Ctrl-C to unmount)"
 echo
+warn_mount_visibility
 
 # -t only when there's a real terminal — otherwise docker errors out
 # (`stdin is not a terminal`) and prevents non-interactive smoke tests.
 TTY_FLAGS=(-i)
 if [[ -t 0 && -t 1 ]]; then TTY_FLAGS+=(-t); fi
 
+# bind-propagation=rshared is meaningful only on Linux/WSL2. On macOS
+# Docker Desktop the flag is accepted but the propagation never crosses
+# the VM boundary, so the mount is container-internal there.
 exec docker run --rm "${TTY_FLAGS[@]}" --name "$CONTAINER_NAME" \
   "${ADD_HOST_FLAGS[@]}" \
   --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \

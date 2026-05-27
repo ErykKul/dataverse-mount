@@ -15,6 +15,9 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 
+# shellcheck disable=SC1091
+source "./lib.sh"
+
 GCP_STATE_DIR="${GCP_STATE_DIR:-./globus-state}"
 LEGACY_VOLUME="${LEGACY_VOLUME:-dataverse-globus-state}"
 
@@ -23,7 +26,11 @@ case "${1-}" in
   -y|--yes) assume_yes=1 ;;
 esac
 
-abs_state="$(readlink -f "$GCP_STATE_DIR" 2>/dev/null || echo "$GCP_STATE_DIR")"
+if [[ -e "$GCP_STATE_DIR" ]]; then
+  abs_state="$(abspath "$GCP_STATE_DIR")"
+else
+  abs_state="$GCP_STATE_DIR"
+fi
 
 # Show what's about to happen.
 echo "About to reset the local Globus endpoint state:"

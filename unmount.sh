@@ -7,11 +7,14 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 
+# shellcheck disable=SC1091
+source "./lib.sh"
+
 DATA_DIR="${DATA_DIR:-./data}"
 
 stopped=0
 for name in dv-mount dv-mount-globus; do
-  if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$name"; then
     echo "Stopping container $name…"
     docker stop -t 10 "$name" >/dev/null 2>&1 || true
     docker rm -f "$name" >/dev/null 2>&1 || true
@@ -19,14 +22,15 @@ for name in dv-mount dv-mount-globus; do
   fi
 done
 
-# If the container died uncleanly, the FUSE mount can linger on the host.
-if [[ -d "$DATA_DIR" ]] && mountpoint -q "$DATA_DIR" 2>/dev/null; then
+# If the container died uncleanly the FUSE mount can linger on the
+# host. fuse_unmount picks the right tool per platform (fusermount on
+# Linux/WSL, umount/diskutil on macOS).
+if [[ -d "$DATA_DIR" ]] && is_mountpoint "$DATA_DIR"; then
   echo "Unmounting stale FUSE mount at $DATA_DIR…"
-  fusermount3 -uz "$DATA_DIR" 2>/dev/null \
-    || fusermount  -uz "$DATA_DIR" 2>/dev/null \
-    || echo "warn: could not unmount $DATA_DIR (may need sudo umount)"
+  fuse_unmount "$DATA_DIR" || \
+    echo "warn: could not unmount $DATA_DIR (may need sudo umount)"
 fi
 
-if [[ $stopped -eq 0 ]] && ! mountpoint -q "$DATA_DIR" 2>/dev/null; then
+if [[ $stopped -eq 0 ]] && ! is_mountpoint "$DATA_DIR"; then
   echo "Nothing to unmount."
 fi

@@ -9,15 +9,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Early failure with a clear message if Docker is missing or not running.
-if ! command -v docker >/dev/null 2>&1; then
-  echo "ERROR: docker not installed — see https://docs.docker.com/engine/install/" >&2
-  exit 1
-fi
-if ! docker info >/dev/null 2>&1; then
-  echo "ERROR: docker daemon not reachable (is dockerd running? are you in the 'docker' group?)" >&2
-  exit 1
-fi
+# shellcheck disable=SC1091
+source "./lib.sh"
+
+require_docker
 
 IMAGE_TAG="${IMAGE_TAG:-dataverse-mount:local-globus}"
 CONTAINER_NAME="${CONTAINER_NAME:-dv-mount-globus}"
@@ -86,7 +81,7 @@ ensure_data_dir() {
 ensure_globus_state() {
   mkdir -p "$GCP_STATE_DIR"
   local abs_state
-  abs_state="$(readlink -f "$GCP_STATE_DIR")"
+  abs_state="$(abspath "$GCP_STATE_DIR")"
 
   # `lta/gridmap` is the marker that GCP -setup has been completed
   # successfully against this state directory.
@@ -139,8 +134,8 @@ if [[ "$DV_HOST" =~ ^https?://(localhost|127\.[0-9]+\.[0-9]+\.[0-9]+)(:[0-9]+)?(
   ADD_HOST_FLAGS+=(--add-host minio.localhost:127.0.0.1 --network host)
 fi
 
-ABS_DATA="$(readlink -f "$DATA_DIR")"
-ABS_STATE="$(readlink -f "$GCP_STATE_DIR")"
+ABS_DATA="$(abspath "$DATA_DIR")"
+ABS_STATE="$(abspath "$GCP_STATE_DIR")"
 
 echo
 echo "Mounting $DATASET_PID from $DV_HOST"
