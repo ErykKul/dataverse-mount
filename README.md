@@ -1,9 +1,37 @@
 # dataverse-mount (with optional Globus endpoint)
 
-Mount any [Dataverse](https://dataverse.org) dataset as a real
-filesystem with a single command. Optionally publish the mount as a
-personal [Globus](https://www.globus.org) endpoint for high-throughput
-transfers.
+## What this does, in plain English
+
+A [Dataverse](https://dataverse.org) dataset is normally something you
+download file-by-file through a website. This tool lets you **browse
+it as if it were a folder on your own computer** — with the original
+folder structure and filenames preserved. Open files in your editor,
+`ls` and `grep` them, point a script at them, drag-and-drop, whatever —
+they behave like real files. Under the hood the bytes are fetched
+on-demand from Dataverse, so you don't have to wait for a full
+download up-front and you don't need disk space for the whole dataset.
+
+That's the basic mode (`./mount.sh`).
+
+The second mode (`./mount-globus.sh`) layers a personal
+[Globus](https://www.globus.org) endpoint on top of the same mount.
+Globus is the standard "I want to move TBs of data between research
+institutions" tool — much faster and more resilient than scp/rsync
+over long distances. Run this script and your machine becomes a
+Globus endpoint serving the dataset, **with the original folder/file
+names preserved** at the destination. Point any other Globus endpoint
+at it — say your HPC cluster's scratch storage — and Globus pulls the
+whole dataset over, ready for your batch jobs to run on it.
+
+**Batteries included**: the script registers the endpoint for you the
+first time you run it. Follow the prompts to log into Globus in your
+browser, paste the verification code back, and the script keeps going
+— the endpoint comes online and you can start transfers from the
+[Globus web app](https://app.globus.org/file-manager) immediately.
+Credentials persist in a Docker volume, so later runs skip straight
+to "endpoint online."
+
+See the [Quickstart](#quickstart) below for the three-line setup.
 
 ```text
            ┌──────────────────────────┐
