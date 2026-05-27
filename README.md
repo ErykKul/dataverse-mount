@@ -1,324 +1,185 @@
 # dataverse-mount (with optional Globus endpoint)
 
-Mount any [Dataverse](https://dataverse.org) dataset as a real filesystem,
-in a single `docker run`. Optionally publish the mount as a personal
-[Globus](https://www.globus.org) endpoint for high-throughput transfers.
+Mount any [Dataverse](https://dataverse.org) dataset as a real
+filesystem with a single command. Optionally publish the mount as a
+personal [Globus](https://www.globus.org) endpoint for high-throughput
+transfers.
 
 ```text
-   docker run … mount
-            │
-            ▼
-   /mnt/dataset (FUSE)              ◄── bind-mount this to your host
-            ▲                            and browse like any folder
-            │
-   ┌────────────────────┐     ┌──────────────┐  ?format=original
-   │ rclone Dataverse   │────►│  Dataverse   │──► presigned S3 URL
-   │ backend (read-only)│     │  /api/access │   (or proxied bytes)
-   └────────────────────┘     └──────────────┘
+           ┌──────────────────────────┐
+           │   docker container       │
+           │  ┌────────────────────┐  │     Dataverse  ──► presigned S3 URL
+ ./data ◄──┼──┤ FUSE mount         │  │           ▲
+  (host)   │  │ rclone backend     │──┼───────────┘
+           │  └────────────────────┘  │
+           │  ┌────────────────────┐  │
+           │  │ (optional)         │  │     Globus Transfer ◄── any
+           │  │ Globus Connect     │  │                          Globus
+           │  │ Personal           │  │                          client
+           │  └────────────────────┘  │
+           └──────────────────────────┘
 ```
 
-Add `--build-arg INCLUDE_GLOBUS=1` at image build time and run with mode
-`mount-globus` to layer Globus Connect Personal on top.
-
-## Why
-
-- A research dataset on a Dataverse instance you don't operate.
-- You want to **read** the bytes as files with the original folder
-  structure — not learn the Dataverse REST API and certainly not get
-  S3 credentials.
-- One `docker run`, a Dataverse token, a dataset PID. Done.
-
-The bytes are fetched via Dataverse's `/api/access/datafile/{id}`
-endpoint with your API token. When the installation is configured for
-direct S3 download, the response is a 302 to a presigned S3 URL — the
-rclone backend follows the redirect transparently. When it isn't, the
-backend reads bytes from the Dataverse server itself. Either way, the
-user only ever sees their Dataverse token.
-
-## What's in the image
-
-- A patched [rclone](https://rclone.org) with a Dataverse backend.
-- `fuse3`, `tini`, `curl`, `ca-certificates`.
-- *(optional, built with `--build-arg INCLUDE_GLOBUS=1`)* [Globus
-  Connect Personal](https://docs.globus.org/globus-connect-personal/),
-  installed at build time, configured at first run.
-- A small entrypoint that wires everything together.
-
-## Prerequisites
-
-- Linux host with Docker, `/dev/fuse`, and the `SYS_ADMIN` capability.
-  Tested on `linux/amd64` and `linux/arm64`.
-- A Dataverse API token. Get it from your user profile in any
-  Dataverse instance.
-- *(Globus mode only)* A free Globus account at
-  https://app.globus.org. You'll log in once via the browser to issue
-  a one-time setup key (see [Globus mode](#globus-mode) below).
-
-The Dataverse instance does **not** need to be operated by you; the
-token just needs read access to the dataset.
-
-## Quick start: mount only
+## Quickstart
 
 ```bash
 git clone https://github.com/ErykKul/dataverse-globus.git
 cd dataverse-globus
-cp sample.env .env            # then edit DV_HOST, DV_TOKEN, DATASET_PID
-docker build -t dataverse-mount .
-mkdir -p data
-docker run --rm -it \
-  --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
-  --mount type=bind,source="$PWD/data",target=/mnt/dataset,bind-propagation=rshared \
-  --env-file .env \
-  dataverse-mount
+./mount.sh
 ```
 
-When the container is up, `./data/` on the host shows the dataset's
-folder structure with the original filenames. Read files like any
-other folder. `Ctrl-C` stops the container and unmounts cleanly.
-
-### Even shorter, with Compose
+That's it. On the first run, `mount.sh` prompts for your Dataverse
+URL, dataset DOI, and (optionally) an API token, saves them to
+`.env`, builds the Docker image, and brings the mount up at `./data`
+in the foreground. Ctrl-C unmounts cleanly. Subsequent runs read
+`.env` and just go.
 
 ```bash
-cp sample.env .env            # edit as above
-docker compose up             # build, mount, foreground
+# In another terminal, while mount.sh is running:
+ls -R ./data
+cat ./data/path/to/file.txt
 ```
 
-The bundled `compose.yml` builds the image, bind-mounts `./data` for
-host visibility, and forwards `.env` automatically. `docker compose
-down` for a clean stop.
+The API token is **optional** — public datasets and published files
+are readable as a guest. Provide a token only when you need restricted
+files, draft versions, or owner-only access.
 
-### Prebuilt images on GHCR (when available)
+## Prerequisites
 
-CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and
-`…:latest-globus` (with GCP) on every push to `main`. If you'd rather
-not build, swap `dataverse-mount` for the GHCR ref in the
-`docker run` above.
+- Linux host with Docker, `/dev/fuse`, and the `SYS_ADMIN` capability
+  (FUSE requires it). Tested on `linux/amd64` and `linux/arm64`.
+- That's it for the mount-only path. For the Globus path you'll also
+  need a free Globus account at https://app.globus.org.
 
-The repo's CI workflow includes a step that PATCHes the package's
-visibility to `public` on every push to `main`, so once the package
-exists it stays publicly pullable. The step needs a repo secret
-`GHCR_VISIBILITY_TOKEN` (a classic PAT with `admin:packages` scope) —
-unset means the first push leaves the package private and the user
-has to flip it manually via **GitHub → Packages → Package settings →
-Change visibility**, or pull after `docker login ghcr.io` with their
-own PAT.
+## Three scripts
 
-The `bind-propagation=rshared` part is what makes the FUSE mount inside
-the container visible on the host. Without it the bind mount only
-shows the directory's contents from container startup, not the live
-FUSE filesystem. (rclone's own docker docs cover this:
-https://rclone.org/install/#docker-image)
+### `./mount.sh` — mount the dataset
 
-If you don't want a host bind mount and just want to `docker exec` into
-the container to inspect files, drop the `--mount` flag.
+Foreground rclone FUSE mount. Container lifetime == mount lifetime;
+`Ctrl-C` shuts down and unmounts cleanly.
 
-### DNS for presigned-URL hosts
+If `.env` is missing, prompts for:
 
-When Dataverse is configured for direct S3 download, `/api/access/datafile/{id}`
-returns a 302 to whatever hostname the storage driver was registered with
-(e.g. `s3.us-east-1.amazonaws.com`, `minio.example.com`). The container
-needs to resolve that hostname. For public hosts this just works. For
-private hosts or local dev setups where the S3 endpoint lives under a
-`.localhost` subdomain (e.g. `minio.localhost:9000`), add a static
-mapping:
+| Prompt              | Required? | Notes                                                            |
+| ---                 | ---       | ---                                                              |
+| Dataverse base URL  | yes       | e.g. `https://demo.dataverse.org`, no trailing slash             |
+| Dataset DOI         | yes       | e.g. `doi:10.5072/FK2/ABCD`                                      |
+| API token           | optional  | blank = guest access (public datasets / public files only)       |
+| Dataset version     | optional  | `:latest`, `:draft`, `:latest-published`, or `1.0`/`2.0`/…       |
+| Ingest format       | optional  | `original` (default) or `archival` — see [Tabular files](#tabular-files-csv-stata-spss) below |
 
-```bash
-docker run --add-host minio.example.com:10.0.0.42 ... 
-```
+### `./mount-globus.sh` — mount the dataset + publish as a Globus endpoint
 
-Symptom of a missing mapping: listings work but reads fail with `cat:
-…: Input/output error`. Container logs show the rclone backend got a
-redirect target it couldn't resolve.
+Same prompts. On first run, also asks for a Globus endpoint name and
+walks you through the device-code login (open a URL, paste a code).
+Endpoint credentials live in a Docker volume so future runs skip
+straight to the mount.
 
-## Globus mode
+When the endpoint comes online (a few seconds after the script
+starts), find it in the Globus web app under your account. Dataset
+files appear at `/mnt/dataset/` inside the endpoint.
 
-For when you want the dataset reachable as a Globus endpoint — useful
-for very large datasets, slow networks, or sharing access with
-collaborators who have Globus.
+`Ctrl-C` takes the endpoint offline and unmounts.
 
-### 1. Build the image with Globus included
+### `./unmount.sh` — stop and clean up
 
-```bash
-docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:globus .
-```
+Stops whichever container is running (`dv-mount` or `dv-mount-globus`)
+and clears any stale FUSE mount on `./data`. Idempotent — safe to run
+any time.
 
-(Or use the Compose profile: `docker compose --profile globus build`.)
+## Tabular files (CSV, Stata, SPSS, …)
 
-Prebuilt images at `ghcr.io/erykkul/dataverse-mount:latest-globus`
-exist once CI publishes them — same private-by-default caveat as
-above.
-
-### 2. Register the endpoint (one-time, interactive)
-
-GCP no longer hands out setup keys from a web button. Run the setup
-mode interactively — it'll print a URL and a one-time code, you visit
-the URL in any browser, log into Globus, paste the code, and the
-endpoint registers itself.
-
-```bash
-docker volume create dataverse-globus-state
-
-docker run --rm -it \
-  -v dataverse-globus-state:/home/dvgr/.globusonline \
-  -e GLOBUS_ENDPOINT_NAME="my-dataverse-mount" \
-  dataverse-mount:globus globus-setup
-```
-
-Watch the terminal for a `https://auth.globus.org/v2/oauth2/device`
-URL and a short user code. Once you complete the device-code flow in
-your browser, GCP writes credentials into the volume and exits. The
-endpoint now shows up in the Globus web app under your account, and
-the volume survives container restarts.
-
-(If you have a legacy setup key from somewhere, pass it via
-`GLOBUS_SETUP_KEY=…` instead. The web UI doesn't generate these
-anymore but old keys still work via the same code path.)
-
-### 3. Run the mount + Globus together
-
-```bash
-docker run -d --name dv-globus \
-  --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
-  -v dataverse-globus-state:/home/dvgr/.globusonline \
-  --env-file .env \
-  dataverse-mount:globus mount-globus
-```
-
-Or via Compose:
-
-```bash
-docker compose --profile globus up -d
-```
-
-A few seconds later the endpoint shows as **online** in the Globus
-web UI under your account. The dataset appears at `/mnt/dataset/` on
-the endpoint — navigate there in the Globus file manager to see the
-files.
-
-`docker stop dv-globus` (or `docker compose --profile globus down`)
-unmounts FUSE and stops GCP cleanly. The state volume keeps the same
-endpoint registered for next time.
-
-## Modes
-
-The container's `CMD` selects the mode. Pass it as the final
-positional argument to `docker run`:
-
-- **`mount`** *(default)* — mount the dataset on `/mnt/dataset` and
-  stay in the foreground. Container lifetime == mount lifetime.
-- **`mount-globus`** — same mount, plus start Globus Connect Personal
-  in the foreground. Requires `INCLUDE_GLOBUS=1` build and a prior
-  `globus-setup` run.
-- **`globus-setup`** — one-time GCP registration. Requires
-  `GLOBUS_SETUP_KEY`. Exits after the endpoint is registered.
-- **`status`** — print whether the mount is live and whether GCP is
-  running. Intended for `docker exec` checks.
-- **`shell`** — drop into a bash shell. For debugging the image.
+Dataverse "ingests" tabular uploads: it parses the file and stores
+both the original bytes and a normalised `.tab` archival form. The
+default (`INGEST_FORMAT=original`) exposes the file under its original
+name with a verifiable MD5 — what most users want. Set
+`INGEST_FORMAT=archival` to expose Dataverse's post-ingest form
+instead (no MD5, no reliable size).
 
 ## Configuration reference
 
-All passed via environment variables. See `sample.env` for defaults.
+All values are read from `.env`. The scripts create one on first run;
+edit by hand to change values, or delete to re-prompt.
 
 | Variable           | Required for         | Description |
 | ---                | ---                  | --- |
-| `DV_HOST`          | `mount`/`mount-globus` | Dataverse base URL, no trailing slash. |
-| `DV_TOKEN`         | `mount`/`mount-globus` | Dataverse API token. Sent as `X-Dataverse-Key` on every request. |
-| `DATASET_PID`      | `mount`/`mount-globus` | Persistent ID, e.g. `doi:10.5072/FK2/ABCD`. |
-| `DATASET_VERSION`  | optional             | `:latest`, `:draft`, `:latest-published`, or `1.0`/`2.0`/…. Default `:latest`. |
-| `INGEST_FORMAT`    | optional             | `original` (default) or `archival`. Which form of a tabular-ingest file (CSV/Stata/SPSS) the mount surfaces. See the backend README for the trade-off. |
+| `DV_HOST`          | always               | Dataverse base URL, no trailing slash. |
+| `DATASET_PID`      | always               | Persistent ID, e.g. `doi:10.5072/FK2/ABCD`. |
+| `DV_TOKEN`         | optional             | Dataverse API token. Blank → guest access. |
+| `DATASET_VERSION`  | optional             | `:latest` (default), `:draft`, `:latest-published`, or `1.0`/`2.0`/…. |
+| `INGEST_FORMAT`    | optional             | `original` (default) or `archival`. |
 | `VFS_CACHE_MODE`   | optional             | rclone VFS cache mode. Default `minimal`. |
 | `VFS_CACHE_MAX_AGE`| optional             | How long cached bytes stay valid. Default `1h`. |
 | `RCLONE_LOG_LEVEL` | optional             | `DEBUG`/`INFO`/`NOTICE`/`ERROR`. Default `INFO`. |
-| `GLOBUS_ENDPOINT_NAME` | `globus-setup` (optional) | Name to give the new endpoint in Globus. Defaults to `dataverse-mount-<hostname>`. |
-| `GLOBUS_SETUP_KEY` | `globus-setup` (legacy) | Old-style setup key. Web UI no longer issues these; provided for backwards compatibility only. |
 
-## Read-only by design
+## Read-only
+
+The backend is intentionally read-only:
 
 - `Put`, `Update`, `Remove`, `Mkdir`, `Rmdir` all return errors.
-- `rclone mount` is invoked with `--read-only`.
+- `rclone mount` runs with `--read-only`.
 
-Globus transfers **from** this endpoint to elsewhere work.
-Transfers **to** this endpoint don't. If you want to upload, use the
-Dataverse UI or its Native API directly.
+Globus transfers **from** this endpoint to elsewhere work. Transfers
+**to** this endpoint don't. If you want to upload, use the Dataverse
+UI or its Native API directly.
 
-## What about the rclone backend itself?
+## Under the hood
 
-Source lives at
-[ErykKul/rclone, branch `dataverse-backend`](https://github.com/ErykKul/rclone/tree/dataverse-backend/backend/dataverse).
-See `backend/dataverse/README.md` there for the backend's own
-configuration, caching, and tabular-ingest handling notes.
+- **Image**: multi-stage Dockerfile. Stage 1 builds the rclone binary
+  from a pinned ref of [ErykKul/rclone](https://github.com/ErykKul/rclone/tree/dataverse-backend/backend/dataverse).
+  Stage 2 is `debian:bookworm-slim` with FUSE3, `tini`, and (when
+  built with `--build-arg INCLUDE_GLOBUS=1`) Globus Connect Personal
+  installed at build time.
+- **Backend behaviour** (in the rclone fork): per-dataset remote,
+  presigned-URL cache with `singleflight` dedup, mid-stream URL
+  resume on long transfers, tabular-ingest handling. See
+  [`backend/dataverse/README.md`](https://github.com/ErykKul/rclone/blob/dataverse-backend/backend/dataverse/README.md)
+  for the gritty details.
 
-The Dockerfile pins the rclone repo and ref via build args
-(`RCLONE_REPO`, `RCLONE_REF`). Override them to build against a fork
-or a specific commit.
+## Building from source manually
 
-## Why not just use `s3fs` against Dataverse's S3 backend?
-
-There's a community recipe at
-[gdcc/dataverse-recipes#35](https://github.com/gdcc/dataverse-recipes/pull/35).
-It works, but:
-
-- It needs the **operator's** S3 credentials. Most operators won't
-  share these.
-- It bypasses Dataverse's access-control checks: if the operator's
-  S3 creds can read the bucket, the user can read every dataset.
-- It surfaces raw S3 object keys, not the dataset's folder
-  structure and human-readable filenames.
-
-This image takes the opposite approach: every byte goes through
-Dataverse's access endpoint, which honours the token's permissions.
-The user never sees S3 credentials. The mount surfaces the dataset's
-`directoryLabel` + `label` tree, so files have the names the dataset
-author chose.
-
-Pick s3fs if you're the operator and want one mount per Dataverse
-instance. Pick this if you're a user and want one mount per dataset.
-
-## Building from source
-
-The recommended path — no reliance on prebuilt images, full control
-over the rclone backend ref and Globus opt-in.
+The scripts auto-build on first run. To build by hand:
 
 ```bash
-# Mount-only (default):
-docker build -t dataverse-mount .
-
-# Mount + Globus:
-docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:globus .
+docker build -t dataverse-mount:local .                                      # mount-only
+docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:local-globus .  # + Globus
 ```
 
-Build against a different rclone fork or branch (e.g. for testing
-backend changes):
+Build against a different rclone fork / branch:
 
 ```bash
 docker build \
   --build-arg RCLONE_REPO=https://github.com/your-fork/rclone.git \
   --build-arg RCLONE_REF=your-branch \
-  -t dataverse-mount .
+  -t dataverse-mount:local .
 ```
 
-Multi-arch via buildx:
+## Prebuilt images on GHCR
+
+CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and
+`…:latest-globus` (with GCP) on every push to `main`. If you'd rather
+skip the build, point `IMAGE_TAG` at GHCR:
 
 ```bash
-docker buildx create --use --name dataverse-mount
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t your-registry/dataverse-mount:latest --push .
+IMAGE_TAG=ghcr.io/erykkul/dataverse-mount:latest ./mount.sh
+IMAGE_TAG=ghcr.io/erykkul/dataverse-mount:latest-globus ./mount-globus.sh
 ```
+
+Note: newly-published GHCR packages default to private. The repo's CI
+flips visibility automatically if the maintainer has set up a
+`GHCR_VISIBILITY_TOKEN` secret (a PAT with `admin:packages` scope); if
+not, the first time you pull you may need to `docker login ghcr.io`
+with your own token.
 
 ## License
 
-Source in this repository (Dockerfile, entrypoint, docs) is MIT —
-see `LICENSE`.
+Source in this repository (Dockerfile, scripts, docs) is MIT — see
+`LICENSE`.
 
 The image bundles:
 
 - rclone (MIT) at the pinned ref.
 - *(only when built with `INCLUDE_GLOBUS=1`)* Globus Connect Personal,
   downloaded at build time from https://downloads.globus.org. GCP is
-  distributed under Globus's own license; the image doesn't
-  redistribute it independently, it fetches per build. See
+  distributed under Globus's own license. See
   https://www.globus.org/legal/license.
-
-If you publish images built from this repo with `INCLUDE_GLOBUS=1`,
-your downstream users also receive the GCP bundle; verify GCP's
-license still permits your distribution model.
