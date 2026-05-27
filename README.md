@@ -6,59 +6,36 @@ A [Dataverse](https://dataverse.org) dataset is normally something you
 download file-by-file through a website. This tool lets you **browse
 it as if it were a folder on your own computer** — with the original
 folder structure and filenames preserved. Open files in your editor,
-`ls` and `grep` them, point a script at them, drag-and-drop, whatever —
-they behave like real files. Under the hood the bytes are fetched
-on-demand from Dataverse, so you don't have to wait for a full
-download up-front and you don't need disk space for the whole dataset.
-
-That's the basic mode (`./mount.sh`).
+`ls` and `grep` them, point a script at them, whatever — they behave
+like real files. Under the hood the bytes are fetched on-demand from
+Dataverse, so there's no upfront download and no disk space needed
+for the whole dataset. That's the basic mode (`./mount.sh`).
 
 The second mode (`./mount-globus.sh`) layers a personal
 [Globus](https://www.globus.org) endpoint on top of the same mount.
-Globus is the standard "I want to move TBs of data between research
-institutions" tool — much faster and more resilient than scp/rsync
-over long distances. Run this script and your machine becomes a
-Globus endpoint serving the dataset, **with the original folder/file
-names preserved** at the destination. Point any other Globus endpoint
-at it — say your HPC cluster's scratch storage — and Globus pulls the
-whole dataset over, ready for your batch jobs to run on it.
+Globus is the standard tool for moving TBs of research data between
+institutions — much faster and more resilient than scp/rsync over
+long distances. Run this script and your machine becomes a Globus
+endpoint serving the dataset (folder/file names preserved at the
+destination); point any other Globus endpoint at it — say your HPC
+cluster's scratch storage — and Globus pulls the whole dataset over.
 
-**Batteries included**: the script registers the endpoint for you the
-first time you run it. Follow the prompts to log into Globus in your
-browser, paste the verification code back, and the script keeps going
-— the endpoint comes online and you can start transfers from the
-[Globus web app](https://app.globus.org/file-manager) immediately.
-Credentials persist in a Docker volume, so later runs skip straight
-to "endpoint online."
+**Almost no setup.** Three pieces of information: the Dataverse URL,
+the dataset DOI, and optionally an API token if the files aren't
+public. The Globus mode adds one extra one-time browser login (the
+script walks you through it) — credentials persist locally so later
+runs go straight to "endpoint online."
 
-**No infrastructure on either side.** You don't need the Globus S3
-connector, an "S3 Connector Server," or any other helper service.
-You don't need to host a backend or a web app. The Dataverse
-instance you connect to doesn't need any new plugins or operator
-changes — works against any standard Dataverse. Everything runs
-inside one Docker container on your own machine: download the repo,
-run the script, you're done.
+**Nothing required from anyone else.** No paid Globus subscription,
+no Globus Connect Server, no Globus S3 connector, no Dataverse-side
+plugin, no operator changes. The traditional "Dataverse + managed
+Globus" path needs all of those — usually only realistic for
+institutions with dedicated data-engineering staff. This tool needs
+none of them: it talks to any standard Dataverse and runs Globus
+Connect Personal under Globus's free tier. Everything happens inside
+one Docker container on your own machine.
 
-**Free Globus account is enough.** Globus Connect Personal — the
-component this tool installs — runs under Globus's free personal-use
-tier. The Dataverse institution doesn't need a paid Globus
-subscription, doesn't need to run a Globus Connect Server, doesn't
-need to manage endpoints. They publish a dataset; you mount it. Zero
-ongoing cost for the institution, no signup beyond your own free
-Globus account.
-
-**Almost no configuration.** The traditional "Dataverse + managed
-Globus" path requires the institution to stand up a Globus Connect
-Server, register endpoints, set up identity mapping between Dataverse
-and Globus accounts, and usually a paid Globus subscription —
-realistic only for institutions with dedicated data-engineering
-staff. This tool needs just three pieces of information from you:
-the Dataverse URL, the dataset DOI, and (optionally) an API token if
-the files aren't public. The Globus-mode setup is one extra
-guided browser login. No service registration, no admin involvement,
-no Dataverse-side Globus configuration.
-
-See the [Quickstart](#quickstart) below for the three-line setup.
+See the [Quickstart](#quickstart) for the three-line setup.
 
 ```text
            ┌──────────────────────────┐
