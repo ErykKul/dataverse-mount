@@ -53,9 +53,13 @@ RUN echo 'user_allow_other' >> /etc/fuse.conf
 
 # Optional: install Globus Connect Personal. The tgz is downloaded
 # fresh each build; pin upstream by setting GCP_URL to a versioned
-# release URL if you need reproducibility.
+# release URL if you need reproducibility. GCP is a Python program
+# so python3 is needed alongside the tarball.
 RUN if [ "${INCLUDE_GLOBUS}" = "1" ]; then \
-      mkdir -p /opt/gcp \
+      apt-get update \
+      && apt-get install -y --no-install-recommends python3 \
+      && rm -rf /var/lib/apt/lists/* \
+      && mkdir -p /opt/gcp \
       && curl -fsSL "${GCP_URL}" -o /tmp/gcp.tgz \
       && tar -xzf /tmp/gcp.tgz -C /opt/gcp --strip-components=1 \
       && rm /tmp/gcp.tgz \

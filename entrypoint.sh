@@ -139,7 +139,11 @@ case "$mode" in
     require_env DATASET_PID
     require_globus_installed
     [[ -d "$GCP_STATE" ]] || fail "GCP state not found at $GCP_STATE. Run 'globus-setup' first."
-    [[ -f "$GCP_STATE/gridmap" ]] || fail "GCP state at $GCP_STATE looks empty (no gridmap). Run 'globus-setup' first."
+    # GCP v3.x stores credentials under $GCP_STATE/lta/. Older versions
+    # put gridmap at the top level. Accept either.
+    if [[ ! -f "$GCP_STATE/lta/gridmap" && ! -f "$GCP_STATE/gridmap" ]]; then
+      fail "GCP state at $GCP_STATE looks empty (no gridmap). Run 'globus-setup' first."
+    fi
 
     write_rclone_conf
     start_mount_background
