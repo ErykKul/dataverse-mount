@@ -92,11 +92,16 @@ down` for a clean stop.
 CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and
 `…:latest-globus` (with GCP) on every push to `main`. If you'd rather
 not build, swap `dataverse-mount` for the GHCR ref in the
-`docker run` above. Note: newly-published GHCR packages default to
-*private*; if `docker pull` returns 404/401, the package owner has
-to flip it to public in **GitHub → Packages → Package settings →
-Change visibility**, or you authenticate to GHCR first
-(`echo $GITHUB_TOKEN | docker login ghcr.io -u <user> --password-stdin`).
+`docker run` above.
+
+The repo's CI workflow includes a step that PATCHes the package's
+visibility to `public` on every push to `main`, so once the package
+exists it stays publicly pullable. The step needs a repo secret
+`GHCR_VISIBILITY_TOKEN` (a classic PAT with `admin:packages` scope) —
+unset means the first push leaves the package private and the user
+has to flip it manually via **GitHub → Packages → Package settings →
+Change visibility**, or pull after `docker login ghcr.io` with their
+own PAT.
 
 The `bind-propagation=rshared` part is what makes the FUSE mount inside
 the container visible on the host. Without it the bind mount only
