@@ -162,9 +162,13 @@ case "$mode" in
     }
     trap cleanup TERM INT
 
-    log "starting Globus Connect Personal in the foreground"
+    # Tell GCP exactly which paths to expose. By default it would
+    # share the user's $HOME (only rclone.log lives there). We want
+    # the dataset, read-only.
+    GCP_PATHS="${GCP_RESTRICT_PATHS:-R$MOUNTPOINT}"
+    log "starting Globus Connect Personal in the foreground (restrict-paths=$GCP_PATHS)"
     cd "$GCP_DIR"
-    ./globusconnectpersonal -start &
+    ./globusconnectpersonal -start -restrict-paths "$GCP_PATHS" &
     GCP_PID=$!
     wait "$GCP_PID"
     ;;
