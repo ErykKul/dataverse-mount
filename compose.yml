@@ -1,0 +1,72 @@
+# Minimal Compose setup: one `docker compose up` after a one-time build
+# + (optional) globus-setup. Reads config from .env in the same dir.
+#
+#   cp sample.env .env       # then edit DV_HOST/DV_TOKEN/DATASET_PID
+#   docker compose build
+#   docker compose run --rm gcp-setup     # only if you want Globus
+#   docker compose up                     # mount (Ctrl-C to stop)
+#   docker compose --profile globus up    # mount + Globus endpoint
+#
+# Bind-mounts the FUSE mount to ./data on the host so you can browse
+# the dataset locally too.
+
+services:
+  mount:
+    build:
+      context: .
+      args:
+        INCLUDE_GLOBUS: "0"
+    image: dataverse-mount:local
+    container_name: dv-mount
+    env_file: .env
+    cap_add: [SYS_ADMIN]
+    devices: ["/dev/fuse"]
+    security_opt: ["apparmor:unconfined"]
+    volumes:
+      - type: bind
+        source: ./data
+        target: /mnt/dataset
+        bind:
+          propagation: rshared
+          create_host_path: true
+    command: mount
+    restart: unless-stopped
+
+  # Globus profile: build a separate image with GCP bundled, mount + serve.
+  # Only starts when invoked with `--profile globus`.
+  mount-globus:
+    profiles: [globus]
+    build:
+      context: .
+      args:
+        INCLUDE_GLOBUS: "1"
+    image: dataverse-mount:local-globus
+    container_name: dv-mount-globus
+    env_file: .env
+    cap_add: [SYS_ADMIN]
+    devices: ["/dev/fuse"]
+    security_opt: ["apparmor:unconfined"]
+    volumes:
+      - dataverse-globus-state:/home/dvgr/.globusonline
+    command: mount-globus
+    restart: unless-stopped
+
+  # One-shot helper to register a new Globus endpoint. Run with:
+  #   docker compose run --rm gcp-setup
+  gcp-setup:
+    profiles: [setup]
+    build:
+      context: .
+      args:
+        INCLUDE_GLOBUS: "1"
+    image: dataverse-mount:local-globus
+    environment:
+      GLOBUS_ENDPOINT_NAME: "${GLOBUS_ENDPOINT_NAME:-dataverse-mount}"
+    volumes:
+      - dataverse-globus-state:/home/dvgr/.globusonline
+    command: globus-setup
+    stdin_open: true
+    tty: true
+
+volumes:
+  dataverse-globus-state:

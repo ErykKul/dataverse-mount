@@ -59,20 +59,44 @@ token just needs read access to the dataset.
 
 ## Quick start: mount only
 
-Copy `sample.env` to `.env` and fill in `DV_HOST`, `DV_TOKEN`,
-`DATASET_PID`. Then:
-
 ```bash
+git clone https://github.com/ErykKul/dataverse-globus.git
+cd dataverse-globus
+cp sample.env .env            # then edit DV_HOST, DV_TOKEN, DATASET_PID
+docker build -t dataverse-mount .
+mkdir -p data
 docker run --rm -it \
   --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor:unconfined \
   --mount type=bind,source="$PWD/data",target=/mnt/dataset,bind-propagation=rshared \
   --env-file .env \
-  ghcr.io/erykkul/dataverse-mount:latest
+  dataverse-mount
 ```
 
 When the container is up, `./data/` on the host shows the dataset's
 folder structure with the original filenames. Read files like any
 other folder. `Ctrl-C` stops the container and unmounts cleanly.
+
+### Even shorter, with Compose
+
+```bash
+cp sample.env .env            # edit as above
+docker compose up             # build, mount, foreground
+```
+
+The bundled `compose.yml` builds the image, bind-mounts `./data` for
+host visibility, and forwards `.env` automatically. `docker compose
+down` for a clean stop.
+
+### Prebuilt images on GHCR (when available)
+
+CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and
+`…:latest-globus` (with GCP) on every push to `main`. If you'd rather
+not build, swap `dataverse-mount` for the GHCR ref in the
+`docker run` above. Note: newly-published GHCR packages default to
+*private*; if `docker pull` returns 404/401, the package owner has
+to flip it to public in **GitHub → Packages → Package settings →
+Change visibility**, or you authenticate to GHCR first
+(`echo $GITHUB_TOKEN | docker login ghcr.io -u <user> --password-stdin`).
 
 The `bind-propagation=rshared` part is what makes the FUSE mount inside
 the container visible on the host. Without it the bind mount only
@@ -113,12 +137,11 @@ collaborators who have Globus.
 docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:globus .
 ```
 
-Or pull the prebuilt image with the `-globus` tag suffix once CI
-publishes it:
+(Or use the Compose profile: `docker compose --profile globus build`.)
 
-```bash
-docker pull ghcr.io/erykkul/dataverse-mount:latest-globus
-```
+Prebuilt images at `ghcr.io/erykkul/dataverse-mount:latest-globus`
+exist once CI publishes them — same private-by-default caveat as
+above.
 
 ### 2. Register the endpoint (one-time, interactive)
 
@@ -156,11 +179,20 @@ docker run -d --name dv-globus \
   dataverse-mount:globus mount-globus
 ```
 
-A few seconds later the endpoint shows as **online** in the Globus web
-UI. Use it like any other Globus endpoint.
+Or via Compose:
 
-`docker stop dv-globus` unmounts FUSE and stops GCP cleanly. The
-state volume keeps the same endpoint registered for next time.
+```bash
+docker compose --profile globus up -d
+```
+
+A few seconds later the endpoint shows as **online** in the Globus
+web UI under your account. The dataset appears at `/mnt/dataset/` on
+the endpoint — navigate there in the Globus file manager to see the
+files.
+
+`docker stop dv-globus` (or `docker compose --profile globus down`)
+unmounts FUSE and stops GCP cleanly. The state volume keeps the same
+endpoint registered for next time.
 
 ## Modes
 
@@ -236,31 +268,35 @@ author chose.
 Pick s3fs if you're the operator and want one mount per Dataverse
 instance. Pick this if you're a user and want one mount per dataset.
 
-## Building locally
+## Building from source
+
+The recommended path — no reliance on prebuilt images, full control
+over the rclone backend ref and Globus opt-in.
 
 ```bash
 # Mount-only (default):
-docker build -t dataverse-mount:dev .
+docker build -t dataverse-mount .
 
 # Mount + Globus:
-docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:dev-globus .
+docker build --build-arg INCLUDE_GLOBUS=1 -t dataverse-mount:globus .
 ```
 
-Build against a different rclone fork or branch:
+Build against a different rclone fork or branch (e.g. for testing
+backend changes):
 
 ```bash
 docker build \
-  --build-arg RCLONE_REPO=https://github.com/example/rclone.git \
-  --build-arg RCLONE_REF=my-branch \
-  -t dataverse-mount:dev .
+  --build-arg RCLONE_REPO=https://github.com/your-fork/rclone.git \
+  --build-arg RCLONE_REF=your-branch \
+  -t dataverse-mount .
 ```
 
-Multi-arch:
+Multi-arch via buildx:
 
 ```bash
 docker buildx create --use --name dataverse-mount
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/erykkul/dataverse-mount:latest --push .
+  -t your-registry/dataverse-mount:latest --push .
 ```
 
 ## License
