@@ -31,6 +31,14 @@ browser, paste the verification code back, and the script keeps going
 Credentials persist in a Docker volume, so later runs skip straight
 to "endpoint online."
 
+**No infrastructure on either side.** You don't need the Globus S3
+connector, an "S3 Connector Server," or any other helper service.
+You don't need to host a backend or a web app. The Dataverse
+instance you connect to doesn't need any new plugins or operator
+changes — works against any standard Dataverse. Everything runs
+inside one Docker container on your own machine: download the repo,
+run the script, you're done.
+
 See the [Quickstart](#quickstart) below for the three-line setup.
 
 ```text
