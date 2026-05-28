@@ -35,14 +35,25 @@ none of them: it talks to any standard Dataverse and runs Globus
 Connect Personal under Globus's free tier. Everything happens inside
 one Docker container on your own machine.
 
+**Works with any Dataverse storage backend.** The tool only uses the
+standard Native API (`/api/datasets/.../versions/...` and
+`/api/access/datafile/{id}`), so it works the same on instances
+backed by local filesystem, S3, Swift, or anything else Dataverse
+supports. If the instance is on S3 *with* direct-download enabled,
+the backend automatically picks up the presigned-URL redirect and
+streams bytes straight from S3 (cutting Dataverse out of the data
+path); otherwise it streams through Dataverse's access endpoint with
+HTTP `Range` requests. Either way, only the bytes you actually read
+are fetched.
+
 See the [Quickstart](#quickstart) for the three-line setup.
 
 ```text
            ┌──────────────────────────┐
-           │   docker container       │
-           │  ┌────────────────────┐  │     Dataverse  ──► presigned S3 URL
- ./data ◄──┼──┤ FUSE mount         │  │           ▲
-  (host)   │  │ rclone backend     │──┼───────────┘
+           │   docker container       │     Dataverse API
+           │  ┌────────────────────┐  │     (bytes proxied, or
+ ./data ◄──┼──┤ FUSE mount         │  │     302 to presigned S3
+  (host)   │  │ rclone backend     │──┼──►  when available)
            │  └────────────────────┘  │
            │  ┌────────────────────┐  │
            │  │ (optional)         │  │     Globus Transfer ◄── any
@@ -154,11 +165,14 @@ real reset. Use `-y` to skip the confirmation prompt.
   in `./globus-state/`, and the endpoint reconnects automatically.
   Resume granularity is per-file (Globus's standard).
 
-- **Presigned-URL expiry mid-stream** (long single-file transfer
-  through a 1-hour AWS URL TTL). The rclone backend detects this,
-  fetches a fresh URL, and re-issues the GET with `Range:
-  bytes=<bytes-already-read>-…` transparently. The caller never sees
-  the failure.
+- **Mid-stream connection breaks.** On a long single-file transfer
+  the backend transparently re-issues with `Range:
+  bytes=<bytes-already-read>-…` and continues. The caller never sees
+  the failure. On S3-direct instances that also covers presigned-URL
+  expiry (typically a 1-hour AWS TTL): the backend detects the
+  failure, fetches a fresh URL, and resumes. On proxy-mode instances
+  (non-S3 storage, or S3 without direct-download) the access URL
+  doesn't expire, so it's just a range continuation.
 
 - **Dataset gets a new version while we're running.** The file list
   is frozen at mount time on purpose (so it can't shift under an
@@ -236,8 +250,10 @@ UI or its Native API directly.
   built with `--build-arg INCLUDE_GLOBUS=1`) Globus Connect Personal
   installed at build time.
 - **Backend behaviour** (in the rclone fork): per-dataset remote,
-  presigned-URL cache with `singleflight` dedup, mid-stream URL
-  resume on long transfers, tabular-ingest handling. See
+  works against any Dataverse storage driver via the Native API,
+  auto-uses S3 presigned redirects when available, access-URL cache
+  with `singleflight` dedup, mid-stream resume on long transfers,
+  tabular-ingest handling. See
   [`backend/dataverse/README.md`](https://github.com/ErykKul/rclone/blob/dataverse-backend/backend/dataverse/README.md)
   for the gritty details.
 
