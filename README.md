@@ -66,8 +66,8 @@ See the [Quickstart](#quickstart) for the three-line setup.
 ## Quickstart
 
 ```bash
-git clone https://github.com/ErykKul/dataverse-globus.git
-cd dataverse-globus
+git clone https://github.com/ErykKul/dataverse-mount.git
+cd dataverse-mount
 ./mount.sh
 ```
 
@@ -284,20 +284,14 @@ binary at runtime: `docker run -v $PWD/rclone:/usr/local/bin/rclone …`.
 
 ## Prebuilt images on GHCR
 
-CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and
-`…:latest-globus` (with GCP) on every push to `main`. If you'd rather
-skip the build, point `IMAGE_TAG` at GHCR:
+CI publishes `ghcr.io/erykkul/dataverse-mount:latest` (mount-only) and `:latest-globus` (with GCP) on every push to `main`. The scripts use these by default — `./mount.sh` pulls `ghcr.io/erykkul/dataverse-mount:latest`, `./mount-globus.sh` pulls `:latest-globus`. Pulls fall back to a local build if the image isn't reachable. To force a local build, point `IMAGE_TAG` somewhere else:
 
 ```bash
-IMAGE_TAG=ghcr.io/erykkul/dataverse-mount:latest ./mount.sh
-IMAGE_TAG=ghcr.io/erykkul/dataverse-mount:latest-globus ./mount-globus.sh
+IMAGE_TAG=dataverse-mount:local ./mount.sh
+IMAGE_TAG=dataverse-mount:local-globus ./mount-globus.sh
 ```
 
-Note: newly-published GHCR packages default to private. The repo's CI
-flips visibility automatically if the maintainer has set up a
-`GHCR_VISIBILITY_TOKEN` secret (a PAT with `admin:packages` scope); if
-not, the first time you pull you may need to `docker login ghcr.io`
-with your own token.
+Note: newly-published GHCR packages default to private. The repo's CI flips visibility automatically if the maintainer has set up a `GHCR_VISIBILITY_TOKEN` secret (a PAT with `admin:packages` scope); if not, the first time you pull you may need to `docker login ghcr.io` with your own token.
 
 ## Running without Docker (native rclone)
 
