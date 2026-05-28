@@ -136,12 +136,13 @@ Stops whichever container is running (`dv-mount` or `dv-mount-globus`)
 and clears any stale FUSE mount on `./data`. Idempotent — safe to run
 any time.
 
-### `./reset-globus.sh` — wipe the Globus endpoint state
+### `./reset.sh` — wipe all local state
 
-Removes `./globus-state/` so the next `./mount-globus.sh` registers a
-new endpoint (with a fresh device-code login). Prints the URL to
-delete the endpoint on Globus's side too — both halves need to go for
-a real reset. Use `-y` to skip the confirmation prompt.
+Removes `.env`, `./data`, and `./globus-state/` so the next run starts
+from a clean slate (re-prompts for dataset config, re-registers the
+Globus endpoint via device-code login). Prints the URL to delete the
+Globus endpoint on Globus's side too — both halves need to go for a
+real reset. Use `-y` to skip the confirmation prompt.
 
 ## What happens during restarts and interruptions
 
@@ -170,22 +171,22 @@ a real reset. Use `-y` to skip the confirmation prompt.
 
 ## Resetting for a demo or fresh start
 
-The Globus endpoint has two halves: local credentials in
-`./globus-state/` and a registered endpoint on Globus's side.
-
-To reset both:
+`./reset.sh` wipes all local state for this project: `.env`, `./data`,
+`./globus-state/`, and any legacy named Docker volume.
 
 ```bash
-./unmount.sh        # stop the container if it's running
-./reset-globus.sh   # wipe ./globus-state/ (and any legacy Docker volume)
+./unmount.sh   # stop the container if it's running
+./reset.sh     # wipe .env + ./data + ./globus-state/
 ```
 
-Then open https://app.globus.org/file-manager/collections, find the
-endpoint (named whatever you typed during setup, default
+If you also registered a Globus endpoint, the endpoint stays on
+Globus's side until you delete it there too: open
+https://app.globus.org/file-manager/collections, find the endpoint
+(named whatever you typed during setup, default
 `dataverse-mount-<hostname>`), menu → **Delete**.
 
-Next `./mount-globus.sh` walks you through registering a fresh
-endpoint from scratch.
+Next `./mount.sh` or `./mount-globus.sh` walks you through the
+prompts again from a clean slate.
 
 (If you only delete the local state without removing the endpoint on
 Globus, the orphaned endpoint stays listed in your account forever
