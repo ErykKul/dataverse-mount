@@ -13,6 +13,11 @@ FROM debian:bookworm-slim AS runtime
 ARG TARGETARCH
 ARG RCLONE_RELEASE_BASE=https://github.com/ErykKul/rclone/releases/download/dataverse-backend-latest
 ARG RCLONE_BINARY_URL=
+# Cache-bust for the rclone download below. The rolling release reuses
+# the same URL, so without this the Docker layer cache would serve a
+# stale binary on rebuild. The build workflow sets it to a per-run value
+# so every rebuild re-downloads the current binary.
+ARG RCLONE_REVISION=
 
 ARG INCLUDE_GLOBUS=0
 ARG GCP_URL=https://downloads.globus.org/globus-connect-personal/linux/stable/globusconnectpersonal-latest.tgz
@@ -33,7 +38,7 @@ RUN apt-get update \
 # fails the build immediately if the URL is bad or the binary doesn't
 # run on this architecture.
 RUN url="${RCLONE_BINARY_URL:-${RCLONE_RELEASE_BASE}/rclone-linux-${TARGETARCH}}" \
-  && echo "downloading rclone from $url" \
+  && echo "downloading rclone (build rev: ${RCLONE_REVISION:-none}) from $url" \
   && curl -fsSL -o /usr/local/bin/rclone "$url" \
   && chmod +x /usr/local/bin/rclone \
   && /usr/local/bin/rclone version

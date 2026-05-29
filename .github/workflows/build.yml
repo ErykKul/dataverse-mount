@@ -55,6 +55,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             INCLUDE_GLOBUS=0
+            RCLONE_REVISION=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=mount
           cache-to: type=gha,mode=max,scope=mount
 
@@ -131,5 +132,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             INCLUDE_GLOBUS=1
+            RCLONE_REVISION=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=mount-globus
           cache-to: type=gha,mode=max,scope=mount-globus
