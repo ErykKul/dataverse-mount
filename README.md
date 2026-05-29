@@ -247,17 +247,18 @@ UI or its Native API directly.
 ## Under the hood
 
 - **Image**: multi-stage Dockerfile. Stage 1 builds the rclone binary
-  from a pinned ref of [ErykKul/rclone](https://github.com/ErykKul/rclone/tree/dataverse-backend/backend/dataverse).
+  from a pinned ref of [ErykKul/rclone](https://github.com/ErykKul/rclone/tree/dataverse-backend/backend/doi).
   Stage 2 is `debian:bookworm-slim` with FUSE3, `tini`, and (when
   built with `--build-arg INCLUDE_GLOBUS=1`) Globus Connect Personal
   installed at build time.
-- **Backend behaviour** (in the rclone fork): per-dataset remote,
-  works against any Dataverse storage driver via the Native API,
-  auto-uses S3 presigned redirects when available, access-URL cache
-  with `singleflight` dedup, mid-stream resume on long transfers,
+- **Backend behaviour** (in the rclone fork): a per-dataset remote on
+  the `doi` backend's Dataverse direct mode, working against any
+  Dataverse storage driver via the Native API, auto-using S3 presigned
+  redirects when available, with a single redirect-following GET per
+  read, transparent mid-stream resume on long transfers, and
   tabular-ingest handling. See
-  [`backend/dataverse/README.md`](https://github.com/ErykKul/rclone/blob/dataverse-backend/backend/dataverse/README.md)
-  for the gritty details.
+  [the `doi` backend docs](https://github.com/ErykKul/rclone/blob/dataverse-backend/docs/content/doi.md)
+  for the details.
 
 ## Building from source manually
 
@@ -333,7 +334,7 @@ upstreamed, switch to the official packages: `brew install rclone` /
 **3. Configure a remote:**
 
 ```bash
-./rclone config create dv dataverse \
+./rclone config create dv doi \
   host=https://demo.dataverse.org \
   dataset_pid=doi:10.70122/FK2/PPIAXE
 # add token=YOUR-TOKEN for restricted/draft datasets
