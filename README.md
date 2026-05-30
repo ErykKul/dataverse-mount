@@ -231,6 +231,7 @@ edit by hand to change values, or delete to re-prompt.
 | `INGEST_FORMAT`    | optional             | `original` (default) or `archival`. |
 | `VFS_CACHE_MODE`   | optional             | rclone VFS cache mode. Default `minimal`. |
 | `VFS_CACHE_MAX_AGE`| optional             | How long cached bytes stay valid. Default `1h`. |
+| `DIR_CACHE_TIME`   | optional             | Directory-listing cache TTL. Default `1000h` — the listing is frozen at mount time, so there is nothing to expire; lower it only when mounting a live draft. |
 | `RCLONE_LOG_LEVEL` | optional             | `DEBUG`/`INFO`/`NOTICE`/`ERROR`. Default `INFO`. |
 
 ## Read-only
